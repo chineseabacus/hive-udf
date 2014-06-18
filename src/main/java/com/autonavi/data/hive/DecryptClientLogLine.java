@@ -9,7 +9,7 @@ import org.apache.hadoop.hive.ql.exec.UDFArgumentException;
 import org.apache.hadoop.hive.ql.exec.UDFArgumentLengthException;
 import org.apache.hadoop.hive.ql.exec.UDFArgumentTypeException;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hadoop.hive.ql.udf.generic.GenericUDF;
+import org.apache.hadoop.hive.ql.udf.generic.GenericUDTF;
 import org.apache.hadoop.hive.serde2.objectinspector.ListObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorFactory;
@@ -21,51 +21,65 @@ import com.autonavi.parse.page.SplitPageLog;
 import com.autonavi.parse.page.bodyBean;
 import com.autonavi.parse.page.pkgBean;
 
-public class DecryptClientLogLine extends GenericUDF {
+public class DecryptClientLogLine extends GenericUDTF {
 
+	private final static long epochstep = 1293811200l * 1000;
 	
 	private static SplitPageLog decryptProxy = new SplitPageLog();
-	public Object evaluate(DeferredObject[] arguments) throws HiveException {
+	public void process(Object[] arguments) throws HiveException {
 		
-		
-		// Should be exactly one argument
-        if( arguments.length!=1 )
-        return null;
-
-
-        String line = arguments[0].get().toString();
-	    if (line == null) {
-			System.out.println("find null input");
-	    	return null;
-	    }
-	    
+		String line = arguments[0].toString();
 	    try {
 			decryptProxy.parse(SplitPageLog.hexStringToBytes(line));
 			System.out.println("finish decrypt one line");
-			List<Object> ret = parseDecryptLog(decryptProxy.getDecryptLog());
-			for(Object o : ret){
-				System.out.println(o.toString());
-			}
-			return ret;
+			
+			pkgBean pkg = decryptProxy.getDecryptLog();
+			flattenDecryptLog(pkg);
 		} catch (Exception e1) {
 			// TODO Auto-generated s block
 			e1.printStackTrace();
-			return null;
 		}
 	    
 	  }
+	
+	/**
+	 * 过滤掉日志收集请求 http://log.amap.com/collector/client/behavior， stepid = 0
+	 * 关联客户端点击与网络事件，修正客户端点击正确的stepid
+	 * @param beans
+	 */
+	
+	private void processClick(List<bodyBean> beans){
 
-	private List<Object> parseDecryptLog(pkgBean pkg){
-		List<Object> ret = new ArrayList<Object>();
+		bodyBean tmpbody = null;
+		for (int i = 0; i < beans.size(); i++) {
+			List<Object> entry = new ArrayList<Object>();
+			tmpbody = beans.get(i);
+			if(tmpbody.getStepid() == 0) {
+			  beans.remove(i); 
+			} else if( (tmpbody.getPage() == 2000 || tmpbody.getPage() == 1000 ) && tmpbody.getButton() == 0){ // request event page = 2000|1000 and button = 0
+				/*
+				Map<String, String> paraMap = Utilities.parseJsonStr2Map(tmpbody.getPara());
+				if(paraMap.get("url").contains("http://s.amap.com/ws/mapapi/poi/tips")){  // sug request 
+				*/
+				if(tmpbody.getPara().contains("\\/ws\\/mapapi\\/poi\\/"))	
+				if(tmpbody.getPara().contains("http:\\/\\/log.amap.com\\/collector\\/client\\/behavior")){  // client log report request
+					
+				} 
+			}
+		}
+	}
 
-		ret.add(pkg.getImei());
+	private void flattenDecryptLog(pkgBean pkg) throws HiveException{
 
-		List<List<Object>> entries = new ArrayList<List<Object>>();
+		if(pkg.getVer().substring(4).compareTo("060200") < 0 ) return;
+		
+		processClick(pkg.getLt());
 		bodyBean tmpbody = null;
 		for (int i = 0; i < pkg.getLt().size(); i++) {
 			tmpbody=pkg.getLt().get(i);
 			List<Object> entry = new ArrayList<Object>();
-			entry.add(tmpbody.getSessionid());
+			entry.add(pkg.getImei());
+			entry.add(Long.toString(tmpbody.getSessionid()));
 			entry.add(tmpbody.getStepid());
 			//entry.add(tmpbody.getAid());
 			entry.add(tmpbody.getSource());
@@ -81,35 +95,35 @@ public class DecryptClientLogLine extends GenericUDF {
 			//Map<String, String> position = new HashMap<String, String>();
 			//position.put("x", tmpbody.getX());
 			//position.put("y", tmpbody.getY());
-			entries.add(entry);
+
+			Map<String, String> cellinfo = new HashMap<String,String>();
+			cellinfo.put("model", pkg.getModel());
+			cellinfo.put("device", pkg.getDevice());
+			cellinfo.put("manufacture", pkg.getManufacture());
+			entry.add(cellinfo);
+
+			Map<String, String> others = new HashMap<String, String>();
+			others.put("version", pkg.getVer());
+			others.put("protocal",pkg.getProtocol_version());
+			others.put("diu2", pkg.getDiu2());
+			others.put("diu3", pkg.getDiu3());
+			others.put("dic", pkg.getDic());
+			entry.add(others);
+
+			entry.add(Utilities.timestamp2string("yyyyMMdd", tmpbody.getActtime() + epochstep));
+			
+			forward(entry.toArray());
 		}
-		ret.add(entries);
 
-		Map<String, String> cellinfo = new HashMap<String,String>();
-		cellinfo.put("model", pkg.getModel());
-		cellinfo.put("device", pkg.getDevice());
-		cellinfo.put("manufacture", pkg.getManufacture());
-		ret.add(cellinfo);
-
-		Map<String, String> others = new HashMap<String, String>();
-		others.put("version", pkg.getVer());
-		others.put("protocal",pkg.getProtocol_version());
-		others.put("diu2", pkg.getDiu2());
-		others.put("diu3", pkg.getDiu3());
-		others.put("dic", pkg.getDic());
-		ret.add(others);
-	
-		ret.add(Utilities.timestamp2string("yyyyMMdd", pkg.getSessionId() + 129381120000l));
-		return ret;
 	}
 	
 	@Override
-	public String getDisplayString(String[] arg0) {
+	public String toString() {
 		// TODO Auto-generated method stub
 		return "decrypt client log";
 	}
 	@Override
-	public ObjectInspector initialize(ObjectInspector[] arguments)
+	public StructObjectInspector initialize(ObjectInspector[] arguments)
 			throws UDFArgumentException {
 		// TODO Auto-generated method stub
 		 if( arguments.length != 1 )
@@ -157,54 +171,46 @@ public class DecryptClientLogLine extends GenericUDF {
 	          ArrayList<ObjectInspector> entryStructFieldObjectInspectors = new ArrayList<ObjectInspector>();
 	 
 	          outputStructFieldNames.add("sessionid");
+	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaStringObjectInspector );
+
+	          outputStructFieldNames.add("stepid");
 	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaLongObjectInspector );
 
-	          entryStructFieldNames.add("stepid");
-	          entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaLongObjectInspector );
-
 	          /*
-	          entryStructFieldNames.add("aid");
-	          entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
+	          outputStructFieldNames.add("aid");
+	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
 	          */
 
-	          entryStructFieldNames.add("source");
-	          entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
+	          outputStructFieldNames.add("source");
+	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
 
-	          entryStructFieldNames.add("service");
-	          entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
+	          outputStructFieldNames.add("service");
+	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
 
-	          entryStructFieldNames.add("page");
-	          entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
+	          outputStructFieldNames.add("page");
+	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
 
-	          entryStructFieldNames.add("button");
-	          entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
+	          outputStructFieldNames.add("button");
+	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
 
-	          entryStructFieldNames.add("action");
-	          entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
+	          outputStructFieldNames.add("action");
+	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
 
-	          entryStructFieldNames.add("acttime");
-	          entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaStringObjectInspector );
+	          outputStructFieldNames.add("acttime");
+	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaStringObjectInspector );
 
-	          entryStructFieldNames.add("x");
-	          entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
+	          outputStructFieldNames.add("x");
+	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
 
-	          entryStructFieldNames.add("y");
-	          entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
+	          outputStructFieldNames.add("y");
+	          outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaIntObjectInspector );
 
-	          entryStructFieldNames.add("paras");
-	          //entryStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaStringObjectInspector );
-	          entryStructFieldObjectInspectors.add( ObjectInspectorFactory.getStandardMapObjectInspector(
+	          outputStructFieldNames.add("paras");
+	          //outputStructFieldObjectInspectors.add( PrimitiveObjectInspectorFactory.javaStringObjectInspector );
+	          outputStructFieldObjectInspectors.add( ObjectInspectorFactory.getStandardMapObjectInspector(
 	        		  								PrimitiveObjectInspectorFactory.javaStringObjectInspector,
 	        		  								PrimitiveObjectInspectorFactory.javaStringObjectInspector));
 
-
-	          StructObjectInspector soi =  ObjectInspectorFactory.getStandardStructObjectInspector(
-	        		  									entryStructFieldNames, entryStructFieldObjectInspectors);
-	          ListObjectInspector loi = ObjectInspectorFactory.getStandardListObjectInspector(soi);
-	          
-	          outputStructFieldNames.add("clicks");
-	          outputStructFieldObjectInspectors.add( loi );
-	         
 	          outputStructFieldNames.add("cellphone");
 	          outputStructFieldObjectInspectors.add( ObjectInspectorFactory.getStandardMapObjectInspector(
 	        		  								PrimitiveObjectInspectorFactory.javaStringObjectInspector,
@@ -221,6 +227,12 @@ public class DecryptClientLogLine extends GenericUDF {
 	          return ObjectInspectorFactory.getStandardStructObjectInspector(
 	        		  outputStructFieldNames,
 	        		  outputStructFieldObjectInspectors);
+	}
+
+	@Override
+	public void close() throws HiveException {
+		// TODO Auto-generated method stub
+		
 	}
 	
 }

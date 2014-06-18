@@ -34,5 +34,10 @@ public class Utilities {
 	public static String timestamp2string (String format, long millseconds){
 		return 	new SimpleDateFormat(format).format(new Timestamp(millseconds));
 	}
+	
+	public static void main(String[] args){
+		System.out.println("now " + System.currentTimeMillis() + " => " +  timestamp2string("yyyyMMdd" ,System.currentTimeMillis()));
+		System.out.println(timestamp2string("yyyyMMdd", 109016106911l + 1293811200000l));
+	}
 
 }
