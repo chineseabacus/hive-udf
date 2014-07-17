@@ -1,15 +1,21 @@
 package com.autonavi.data.hive;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Set;
 
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.map.ObjectMapper;
@@ -194,5 +200,26 @@ public class Utilities {
 		    
 		    return null;
 	}
+
+
+		//load list from file, for blacklist or whitelist
+		public static Set<String> loadfile(String filename) {
+
+			Set<String> ret = new HashSet<String>();
+			try {
+				BufferedReader in = new BufferedReader(new FileReader(filename));
+				String line = null;
+				while((line = in.readLine())!=null){
+						ret.add(line);
+				}
+				in.close();
+			} catch (FileNotFoundException e) {
+				System.err.println("file " + filename + " not found to load as list");
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			return ret;
+		}
 		
 }

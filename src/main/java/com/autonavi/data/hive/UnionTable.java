@@ -1,25 +1,15 @@
 package com.autonavi.data.hive;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-
 import org.apache.hadoop.hive.ql.exec.UDFArgumentTypeException;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.SemanticException;
 import org.apache.hadoop.hive.ql.udf.generic.AbstractGenericUDAFResolver;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDAFEvaluator;
-import org.apache.hadoop.hive.serde2.objectinspector.ListObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
-import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorFactory;
-import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorUtils;
-import org.apache.hadoop.hive.serde2.objectinspector.StandardListObjectInspector;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 
-public class UnionList extends AbstractGenericUDAFResolver {
+public class UnionTable extends AbstractGenericUDAFResolver {
 	
-	  public UnionList() {
+	  public UnionTable() {
 	  }
 
 	  @Override
@@ -39,6 +29,7 @@ public class UnionList extends AbstractGenericUDAFResolver {
 	  
 	  
 	  
+      /*
 	  public static class GenericUDAFMkCollectionEvaluator extends GenericUDAFEvaluator {
 
 		  public GenericUDAFMkCollectionEvaluator(){
@@ -78,12 +69,15 @@ public class UnionList extends AbstractGenericUDAFResolver {
 			    System.out.println("input element oi class" + parameters[0].getClass());
 
 			    if (m == Mode.PARTIAL1) {
+			      System.out.println("get oi for Mode.PARTIAL1");
 			      inputOI = (ListObjectInspector) parameters[0];
 			      System.out.println("child of input element oi class" + inputOI.getListElementObjectInspector().getClass());
 			      return ObjectInspectorFactory.getStandardListObjectInspector(inputOI);
 			      
 			    } else {
-			      
+                   
+			      System.out.println("input list level = " + computeListLevel(parameters[0])); 
+			      System.out.println("get oi for Mode.PARTIAL2");
 			      if(computeListLevel(parameters[0]) == 1){
 			        System.out.println("no map aggregation.");
 			        inputOI = (ListObjectInspector)  ObjectInspectorUtils.getStandardObjectInspector(parameters[0]);
@@ -92,7 +86,6 @@ public class UnionList extends AbstractGenericUDAFResolver {
 			      } 
 			      else {
 			        internalMergeOI = (StandardListObjectInspector) parameters[0];
-			        System.out.println("child of input element oi class" +  internalMergeOI.getListElementObjectInspector().getClass());
 			        //inputOI = (ListObjectInspector)  ObjectInspectorUtils.getStandardObjectInspector(internalMergeOI.getListElementObjectInspector());
 			        inputOI = (ListObjectInspector) internalMergeOI.getListElementObjectInspector();
 			        //return   ObjectInspectorUtils.getStandardObjectInspector(internalMergeOI.getListElementObjectInspector());
@@ -118,20 +111,15 @@ public class UnionList extends AbstractGenericUDAFResolver {
 	     public void iterate(AggregationBuffer agg, Object[] parameters)
 	         throws HiveException {
 	       assert (parameters.length == 1);
-	       Object p = parameters[0];
-	       System.out.println("start to collect row");
-	       System.out.println("element class " + inputOI.getListElement(p, 0).getClass());
-
-	       /*
-	       for(Object row : inputOI.getList(p)){
-	    	 System.out.println("row class is " + row.getClass());
-	         MkArrayAggregationBuffer myagg = (MkArrayAggregationBuffer) agg;
-	         putIntoCollection(row, myagg);
-	       }
-	       */
+	       Object table = parameters[0];
+           System.out.println("iterater object size: " + inputOI.getListLength(table));
 	       MkArrayAggregationBuffer myagg = (MkArrayAggregationBuffer) agg;
-	       putIntoCollection(parameters[0], myagg);
-	 	   System.out.println("finish collecting row");
+
+	       //for(Object row : inputOI.getList(p)){
+	       //	 System.out.println("subelement of iterater object is " + row.getClass());
+	       //  putIntoCollection(row, myagg);
+	       // }
+	       putIntoCollection(table, myagg);
 	     }
 
 	     //mapside
@@ -140,7 +128,10 @@ public class UnionList extends AbstractGenericUDAFResolver {
 	       MkArrayAggregationBuffer myagg = (MkArrayAggregationBuffer) agg;
 	       List<Object> ret = new ArrayList<Object>(myagg.container.size());
 	       ret.addAll(myagg.container);
-	       System.out.println("finish terminatePartial");
+           System.out.println("in terminatePartial size = " + myagg.container.size());
+           for(Object o : myagg.container){
+                System.out.println("each  count  is " + ((LazyBinaryArray)o).getListLength()); 
+           }
 	       return ret;
 	     }
 
@@ -159,7 +150,6 @@ public class UnionList extends AbstractGenericUDAFResolver {
 	        	 }
 	         }
 	       }
-	       System.out.println("finish merging");
 	     }
 
 	     @Override
@@ -167,6 +157,7 @@ public class UnionList extends AbstractGenericUDAFResolver {
 	       MkArrayAggregationBuffer myagg = (MkArrayAggregationBuffer) agg;
 	       List<Object> ret = new ArrayList<Object>(myagg.container.size());
 	       ret.addAll(myagg.container);
+           System.out.println("in terminate size = " + myagg.container.size());
 	       return ret;
 	     }
 
@@ -177,4 +168,5 @@ public class UnionList extends AbstractGenericUDAFResolver {
 
 	  }
 	
+    */
 }

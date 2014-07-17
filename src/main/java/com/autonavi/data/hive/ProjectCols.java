@@ -18,20 +18,22 @@ public class ProjectCols extends GenericUDF {
 
 	private ListObjectInspector inloi ;
 	private StructObjectInspector insoi ;
-	private List<Integer> fieldIndex;
+	private List<Integer> fieldIndex = new ArrayList<Integer>();
 
 	@Override
 	public Object evaluate(DeferredObject[] values) throws HiveException {
 		// TODO Auto-generated method stub
         List<?> table = inloi.getList(values[0].get());
         List<Object> outputTable = new ArrayList<Object>();
-        for(Object row : table){
-        	List<Object> fields = insoi.getStructFieldsDataAsList(row);
-        	List<Object> outputFields = new ArrayList<Object>();
-        	for(int i : fieldIndex) {
-        		outputFields.add(fields.get(i));
+        if(table != null) {
+        	for(Object row : table){
+        		List<Object> fields = insoi.getStructFieldsDataAsList(row);
+        		List<Object> outputFields = new ArrayList<Object>();
+        		for(int i : fieldIndex) {
+        			outputFields.add(fields.get(i));
+        		}
+        		outputTable.add(outputFields);
         	}
-        	outputTable.add(outputFields);
         }
 		return outputTable;
 	}
